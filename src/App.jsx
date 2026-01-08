@@ -1,0 +1,506 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  LayoutDashboard, 
+  KanbanSquare, 
+  StickyNote, 
+  FileText, 
+  Target, 
+  Plus, 
+  CheckCircle2, 
+  Clock, 
+  Trash2, 
+  X, 
+  Menu,
+  ChevronRight,
+  Upload,
+  ExternalLink,
+  Calendar,
+  Zap,
+  CheckSquare,
+  Hash,
+  Percent,
+  MoreHorizontal
+} from 'lucide-react';
+
+// --- ESTILOS PARA SCROLL Y UX MÓVIL ---
+const MobileStyles = () => (
+  <style>{`
+    /* Scroll suave nativo para iOS/Android */
+    .smooth-scroll {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+    
+    /* Ocultar scrollbar pero permitir scroll (opcional, para limpieza visual) */
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Ajuste para inputs en móvil para evitar zoom */
+    input, textarea {
+      font-size: 16px !important;
+    }
+  `}</style>
+);
+
+// --- COMPONENTES UI ---
+
+const Card = ({ children, className = "" }) => (
+  <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 ${className}`}>
+    {children}
+  </div>
+);
+
+const Button = ({ children, onClick, variant = "primary", className = "", size = "md", disabled = false }) => {
+  const baseStyle = "font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 transform transition-transform";
+  const variants = {
+    primary: "bg-blue-600 active:bg-blue-700 text-white shadow-md shadow-blue-500/20",
+    secondary: "bg-slate-100 dark:bg-slate-700 active:bg-slate-200 dark:active:bg-slate-600 text-slate-800 dark:text-slate-100",
+    danger: "bg-red-50 active:bg-red-100 text-red-600",
+    ghost: "active:bg-slate-100 dark:active:bg-slate-800 text-slate-600 dark:text-slate-300"
+  };
+  const sizes = {
+    sm: "px-3 py-1.5 text-sm",
+    md: "px-4 py-3 md:py-2", // Más alto en móvil para mejor tacto
+    icon: "p-3 md:p-2"
+  };
+
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+// --- MÓDULOS ---
+
+// 1. KANBAN (Input arriba)
+const KanbanColumn = ({ title, status, color, tasks, moveTask, deleteTask, onAddTask }) => {
+  const [localText, setLocalText] = useState("");
+
+  const handleAdd = () => {
+    if (!localText.trim()) return;
+    onAddTask(localText);
+    setLocalText("");
+  };
+
+  return (
+    <div className="flex-none w-[85vw] md:w-80 bg-slate-100 dark:bg-slate-900 rounded-xl flex flex-col h-full border border-slate-200 dark:border-slate-800 snap-center mx-1 md:mx-0">
+      {/* Header Columna */}
+      <div className={`p-3 font-bold flex items-center gap-2 ${color} border-b border-slate-200 dark:border-slate-800/50`}>
+        <div className={`w-3 h-3 rounded-full ${color.replace('text', 'bg')}`}></div>
+        {title} 
+        <span className="bg-slate-200 dark:bg-slate-800 text-slate-500 text-xs py-0.5 px-2 rounded-full ml-auto">{tasks.length}</span>
+      </div>
+      
+      {/* Input Flotante en Columna (ARRIBA) */}
+      {status === 'todo' && (
+        <div className="p-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="flex gap-2">
+            <input 
+              value={localText}
+              onChange={(e) => setLocalText(e.target.value)}
+              placeholder="Nueva tarea..." 
+              className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            />
+            <button onClick={handleAdd} className="bg-blue-600 text-white p-2 rounded-lg active:scale-90 transition-transform">
+              <Plus size={20}/>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de Tareas Scrollable */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-2 smooth-scroll">
+        {tasks.map(task => (
+          <div key={task.id} className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 active:border-blue-400 transition-colors">
+            <p className="text-slate-800 dark:text-slate-200 font-medium text-sm leading-snug">{task.title}</p>
+            <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+              <span className="text-[10px] text-slate-400">{new Date(task.createdAt).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+              
+              {/* Botones de acción móviles */}
+              <div className="flex gap-2">
+                {status !== 'todo' && <button onClick={() => moveTask(task.id, 'todo')} className="w-8 h-8 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center dark:bg-pink-900/30 dark:text-pink-300"><div className="w-2 h-2 rounded-full bg-current"></div></button>}
+                {status !== 'doing' && <button onClick={() => moveTask(task.id, 'doing')} className="w-8 h-8 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center dark:bg-yellow-900/30 dark:text-yellow-300"><div className="w-2 h-2 rounded-full bg-current"></div></button>}
+                {status !== 'done' && <button onClick={() => moveTask(task.id, 'done')} className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center dark:bg-green-900/30 dark:text-green-300"><div className="w-2 h-2 rounded-full bg-current"></div></button>}
+                <button onClick={() => deleteTask(task.id)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center dark:bg-slate-700"><Trash2 size={14}/></button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {/* Espacio extra al final para scroll */}
+        <div className="h-12 md:h-0"></div>
+      </div>
+    </div>
+  );
+};
+
+const KanbanModule = ({ tasks, setTasks }) => {
+  const addTask = (title) => {
+    const task = { id: Date.now(), title, status: 'todo', createdAt: new Date().toISOString() };
+    setTasks([...tasks, task]);
+  };
+  const moveTask = (taskId, newStatus) => setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+  const deleteTask = (taskId) => setTasks(tasks.filter(t => t.id !== taskId));
+
+  return (
+    <div className="flex flex-col h-full w-full bg-white dark:bg-slate-950">
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-10">
+         <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+          <KanbanSquare className="text-blue-500" /> Tablero
+        </h2>
+        <span className="text-xs text-slate-400">Desliza →</span>
+      </div>
+      
+      {/* Contenedor Horizontal para Móvil */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden bg-slate-50 dark:bg-slate-950 smooth-scroll">
+        <div className="h-full flex px-2 py-4 gap-3 w-max snap-x snap-mandatory">
+          <KanbanColumn title="Por Hacer" status="todo" color="text-pink-500" tasks={tasks.filter(t => t.status === 'todo')} moveTask={moveTask} deleteTask={deleteTask} onAddTask={addTask} />
+          <KanbanColumn title="En Progreso" status="doing" color="text-yellow-500" tasks={tasks.filter(t => t.status === 'doing')} moveTask={moveTask} deleteTask={deleteTask} />
+          <KanbanColumn title="Terminado" status="done" color="text-green-500" tasks={tasks.filter(t => t.status === 'done')} moveTask={moveTask} deleteTask={deleteTask} />
+          <div className="w-2"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 2. NOTAS (Simplificado para móvil)
+const NotesModule = ({ notes, setNotes }) => {
+  const [activeNote, setActiveNote] = useState(null);
+
+  const createNote = () => {
+    const newNote = { id: Date.now(), title: "", content: "", updatedAt: new Date().toISOString() };
+    setNotes([newNote, ...notes]);
+    setActiveNote(newNote);
+  };
+  
+  const updateNote = (field, value) => {
+    if (!activeNote) return;
+    const updated = { ...activeNote, [field]: value, updatedAt: new Date().toISOString() };
+    setActiveNote(updated);
+    setNotes(notes.map(n => n.id === activeNote.id ? updated : n));
+  };
+
+  // Si hay nota activa, mostramos EDITOR
+  if (activeNote) {
+    return (
+      <div className="flex flex-col h-full bg-white dark:bg-slate-900 absolute inset-0 z-20">
+        <div className="flex items-center gap-2 p-4 border-b border-slate-200 dark:border-slate-800">
+          <button onClick={() => setActiveNote(null)} className="p-2 -ml-2 text-slate-500"><ChevronRight className="rotate-180" /></button>
+          <input 
+            value={activeNote.title}
+            onChange={(e) => updateNote('title', e.target.value)}
+            className="flex-1 font-bold bg-transparent focus:outline-none text-slate-800 dark:text-white"
+            placeholder="Título..."
+          />
+          <button onClick={() => {
+            setNotes(notes.filter(n => n.id !== activeNote.id));
+            setActiveNote(null);
+          }} className="text-red-500"><Trash2 size={20}/></button>
+        </div>
+        <textarea 
+          value={activeNote.content}
+          onChange={(e) => updateNote('content', e.target.value)}
+          className="flex-1 p-4 bg-transparent resize-none focus:outline-none text-lg leading-relaxed dark:text-slate-300"
+          placeholder="Escribe aquí..."
+          autoFocus
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 space-y-4 pb-24">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold flex items-center gap-2 dark:text-white"><StickyNote className="text-yellow-500" /> Notas</h2>
+        <Button onClick={createNote} size="sm"><Plus size={18}/> Nueva</Button>
+      </div>
+      <div className="grid gap-3">
+        {notes.length === 0 && <p className="text-slate-400 text-center py-10">No hay notas.</p>}
+        {notes.map(note => (
+          <div key={note.id} onClick={() => setActiveNote(note)} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 active:scale-[0.98] transition-transform">
+            <h3 className="font-bold text-slate-800 dark:text-white mb-1">{note.title || "Sin título"}</h3>
+            <p className="text-slate-500 text-sm truncate">{note.content || "Vacío"}</p>
+            <p className="text-xs text-slate-400 mt-2">{new Date(note.updatedAt).toLocaleDateString()}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// 3. OBJETIVOS
+const GoalsModule = ({ goals, setGoals }) => {
+  const [newGoal, setNewGoal] = useState("");
+  const addGoal = () => {
+    if (!newGoal) return;
+    setGoals([...goals, { id: Date.now(), title: newGoal, progress: 0 }]);
+    setNewGoal("");
+  };
+
+  return (
+    <div className="p-4 pb-24 space-y-6">
+      <h2 className="text-2xl font-bold flex items-center gap-2 dark:text-white"><Target className="text-purple-500" /> Metas</h2>
+      
+      <div className="flex gap-2">
+        <input 
+          value={newGoal}
+          onChange={(e) => setNewGoal(e.target.value)}
+          className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 dark:text-white"
+          placeholder="Nueva meta..."
+        />
+        <Button onClick={addGoal}><Plus/></Button>
+      </div>
+
+      <div className="space-y-4">
+        {goals.map(goal => (
+          <Card key={goal.id}>
+            <div className="flex justify-between mb-2">
+              <span className="font-bold dark:text-white">{goal.title}</span>
+              <button onClick={() => setGoals(goals.filter(g => g.id !== goal.id))} className="text-slate-400"><Trash2 size={18}/></button>
+            </div>
+            <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-3">
+              <div className="h-full bg-purple-500 transition-all" style={{ width: `${goal.progress}%` }}></div>
+            </div>
+            <div className="flex justify-between gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setGoals(goals.map(g => g.id === goal.id ? {...g, progress: Math.max(0, g.progress - 10)} : g))}>-10%</Button>
+              <span className="font-bold self-center dark:text-white">{goal.progress}%</span>
+              <Button size="sm" variant="secondary" onClick={() => setGoals(goals.map(g => g.id === goal.id ? {...g, progress: Math.min(100, g.progress + 10)} : g))}>+10%</Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// 4. HABITOS
+const HabitsModule = ({ habits, setHabits }) => {
+  const [newHabit, setNewHabit] = useState("");
+
+  const today = new Date().toLocaleDateString('en-CA');
+  
+  const addHabit = () => {
+    if (!newHabit.trim()) return;
+    setHabits([...habits, {
+      id: Date.now(),
+      title: newHabit,
+      completedDates: [],
+      streak: 0
+    }]);
+    setNewHabit("");
+  };
+
+  const toggle = (id) => {
+    setHabits(habits.map(h => {
+      if (h.id !== id) return h;
+      const done = h.completedDates.includes(today);
+      return { 
+        ...h, 
+        completedDates: done ? h.completedDates.filter(d => d !== today) : [...h.completedDates, today],
+        streak: done ? Math.max(0, h.streak - 1) : h.streak + 1
+      };
+    }));
+  };
+
+  const deleteHabit = (id) => {
+    setHabits(habits.filter(h => h.id !== id));
+  }
+
+  return (
+    <div className="p-4 pb-24 space-y-4">
+      <h2 className="text-2xl font-bold flex items-center gap-2 dark:text-white"><Zap className="text-yellow-500" /> Hábitos</h2>
+      
+      <div className="flex gap-2 mb-4">
+        <input 
+          value={newHabit}
+          onChange={(e) => setNewHabit(e.target.value)}
+          placeholder="Nuevo hábito..."
+          className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-yellow-500 dark:text-white"
+          onKeyDown={(e) => e.key === 'Enter' && addHabit()}
+        />
+        <Button onClick={addHabit}><Plus/></Button>
+      </div>
+
+      {habits.map(h => (
+        <div key={h.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm flex items-center justify-between active:scale-[0.98] transition-transform">
+          <div onClick={() => toggle(h.id)} className="flex-1 cursor-pointer">
+            <h3 className="font-bold dark:text-white">{h.title}</h3>
+            <span className="text-xs text-orange-500 font-bold">🔥 {h.streak} días</span>
+          </div>
+          <div className="flex items-center gap-3">
+             <div onClick={() => toggle(h.id)} className="cursor-pointer">
+              {h.completedDates.includes(today) 
+                ? <CheckCircle2 className="text-green-500" size={32} fill="currentColor" fillOpacity={0.2} />
+                : <div className="w-8 h-8 rounded-full border-2 border-slate-300 dark:border-slate-600"></div>
+              }
+             </div>
+             <button onClick={() => deleteHabit(h.id)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16}/></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// --- APP SHELL ---
+
+export default function App() {
+  const [view, setView] = useState('dashboard');
+  const [darkMode, setDarkMode] = useState(true);
+
+  // Datos simulados
+  const [tasks, setTasks] = useState(() => JSON.parse(localStorage.getItem('tasks')) || [{ id: 1, title: 'Probar App en Móvil', status: 'todo', createdAt: new Date().toISOString() }]);
+  const [notes, setNotes] = useState(() => JSON.parse(localStorage.getItem('notes')) || []);
+  const [goals, setGoals] = useState(() => JSON.parse(localStorage.getItem('goals')) || []);
+  const [habits, setHabits] = useState(() => JSON.parse(localStorage.getItem('habits')) || [{ id: 1, title: "Beber Agua", streak: 3, completedDates: [] }]);
+
+  useEffect(() => { localStorage.setItem('tasks', JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem('notes', JSON.stringify(notes)); }, [notes]);
+  useEffect(() => { localStorage.setItem('goals', JSON.stringify(goals)); }, [goals]);
+  useEffect(() => { localStorage.setItem('habits', JSON.stringify(habits)); }, [habits]);
+
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  // Función para determinar color del punto de estado en Dashboard
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'todo': return 'bg-pink-500'; // Coincide con color de columna "Por hacer"
+      case 'doing': return 'bg-yellow-500'; // Coincide con color de columna "En progreso"
+      case 'done': return 'bg-green-500'; // Coincide con color de columna "Terminado"
+      default: return 'bg-slate-500';
+    }
+  };
+
+  // Barra de Navegación Inferior
+  const BottomNav = () => (
+    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe px-6 py-2 flex justify-between items-center z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:hidden">
+      <button onClick={() => setView('dashboard')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
+        <LayoutDashboard size={24} strokeWidth={view === 'dashboard' ? 2.5 : 2} />
+        <span className="text-[10px] font-medium">Inicio</span>
+      </button>
+      <button onClick={() => setView('kanban')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'kanban' ? 'text-blue-600' : 'text-slate-400'}`}>
+        <KanbanSquare size={24} strokeWidth={view === 'kanban' ? 2.5 : 2} />
+        <span className="text-[10px] font-medium">Kanban</span>
+      </button>
+      <div className="relative -top-6">
+        <button onClick={() => setView('notes')} className="bg-blue-600 text-white p-4 rounded-full shadow-lg shadow-blue-600/30 active:scale-90 transition-transform">
+          <StickyNote size={24} />
+        </button>
+      </div>
+      <button onClick={() => setView('goals')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'goals' ? 'text-blue-600' : 'text-slate-400'}`}>
+        <Target size={24} strokeWidth={view === 'goals' ? 2.5 : 2} />
+        <span className="text-[10px] font-medium">Metas</span>
+      </button>
+      <button onClick={() => setView('habits')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'habits' ? 'text-blue-600' : 'text-slate-400'}`}>
+        <Zap size={24} strokeWidth={view === 'habits' ? 2.5 : 2} />
+        <span className="text-[10px] font-medium">Hábito</span>
+      </button>
+    </div>
+  );
+
+  // Sidebar para Desktop
+  const DesktopSidebar = () => (
+    <aside className="hidden md:flex w-64 flex-col border-r border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex-none h-screen">
+      <div className="font-bold text-xl mb-8 flex items-center gap-2 px-2 text-slate-800 dark:text-white">
+        <div className="w-8 h-8 bg-blue-600 rounded-lg"></div> OS
+      </div>
+      <nav className="space-y-1">
+        {[
+          { id: 'dashboard', icon: LayoutDashboard, label: 'Inicio' },
+          { id: 'kanban', icon: KanbanSquare, label: 'Tareas' },
+          { id: 'notes', icon: StickyNote, label: 'Notas' },
+          { id: 'goals', icon: Target, label: 'Metas' },
+          { id: 'habits', icon: Zap, label: 'Hábitos' },
+        ].map(item => (
+          <button 
+            key={item.id}
+            onClick={() => setView(item.id)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${view === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+          >
+            <item.icon size={20} /> {item.label}
+          </button>
+        ))}
+      </nav>
+      <div className="mt-auto">
+        <button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center gap-2 px-3 py-2 text-slate-500">
+          {darkMode ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}
+        </button>
+      </div>
+    </aside>
+  );
+
+  return (
+    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
+      <MobileStyles />
+      
+      <DesktopSidebar />
+
+      {/* Contenedor Principal (Main) */}
+      <main className="flex-1 flex flex-col h-full w-full relative">
+        
+        {/* En móvil, el scroll lo maneja este contenedor, EXCEPTO en Kanban que tiene su propio layout */}
+        <div className={`flex-1 w-full ${view === 'kanban' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto smooth-scroll'}`}>
+          
+          {/* Header Móvil (Solo visible en Dashboard) */}
+          {view === 'dashboard' && (
+            <div className="md:hidden p-6 pb-2">
+              <h1 className="text-3xl font-bold">Hola 👋</h1>
+              <p className="text-slate-500">Tu día de un vistazo.</p>
+            </div>
+          )}
+
+          {/* Renderizado de Vistas */}
+          {view === 'dashboard' && (
+            <div className="p-4 pb-24 space-y-4 max-w-4xl mx-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div onClick={() => setView('kanban')} className="bg-blue-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-900/20 active:scale-95 transition-transform">
+                  <KanbanSquare className="mb-2 opacity-80" />
+                  <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'todo').length}</div>
+                  <div className="text-xs text-blue-100">Pendientes</div>
+                </div>
+                <div onClick={() => setView('habits')} className="bg-orange-500 text-white p-4 rounded-2xl shadow-lg shadow-orange-900/20 active:scale-95 transition-transform">
+                  <Zap className="mb-2 opacity-80" />
+                   <div className="text-2xl font-bold">{habits.length}</div>
+                  <div className="text-xs text-orange-100">Hábitos</div>
+                </div>
+              </div>
+              
+              <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                <h3 className="font-bold mb-3 flex items-center gap-2"><Clock size={16}/> Recientes</h3>
+                {tasks.length > 0 ? (
+                  tasks.slice(0, 3).map(t => (
+                    <div key={t.id} className="py-2 border-b border-slate-100 dark:border-slate-800 last:border-0 flex items-center gap-2">
+                      {/* Aquí aplicamos el color dinámico */}
+                      <div className={`w-2 h-2 rounded-full ${getStatusColor(t.status)}`}></div>
+                      <span className="text-sm truncate">{t.title}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-400 italic">No hay tareas recientes.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {view === 'kanban' && <KanbanModule tasks={tasks} setTasks={setTasks} />}
+          {view === 'notes' && <NotesModule notes={notes} setNotes={setNotes} />}
+          {view === 'goals' && <GoalsModule goals={goals} setGoals={setGoals} />}
+          {view === 'habits' && <HabitsModule habits={habits} setHabits={setHabits} />}
+          
+        </div>
+
+        <BottomNav />
+      </main>
+    </div>
+  );
+}
