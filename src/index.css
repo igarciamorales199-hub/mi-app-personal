@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos extra para asegurar que la app se sienta nativa en móvil */
+html, body {
+  height: 100%;
+  overscroll-behavior-y: none; /* Evita el rebote de página en iOS/Android */
+  -webkit-tap-highlight-color: transparent; /* Quita el brillo azul al tocar botones */
+}
+
+#root {
+  height: 100%;
+}
+
+/* Área segura para iPhones nuevos (evita que la barra inferior se solape con la línea de home) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
