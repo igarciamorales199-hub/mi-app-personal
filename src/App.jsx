@@ -23,14 +23,14 @@ import {
 } from "firebase/firestore";
 
 // --- CONFIGURACIÓN DE FIREBASE (INTEGRADA) ---
-// REEMPLAZA ESTOS VALORES CON TUS CREDENCIALES REALES DE FIREBASE
+// TUS CREDENCIALES REALES
 const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "TU_AUTH_DOMAIN_AQUI",
-  projectId: "TU_PROJECT_ID_AQUI",
-  storageBucket: "TU_STORAGE_BUCKET_AQUI",
-  messagingSenderId: "TU_MESSAGING_SENDER_ID_AQUI",
-  appId: "TU_APP_ID_AQUI"
+  apiKey: "AIzaSyDKJhSx4GctH-GlHbOesHp_4bbxlkeNtnI",
+  authDomain: "personal-os-sync-147d2.firebaseapp.com",
+  projectId: "personal-os-sync-147d2",
+  storageBucket: "personal-os-sync-147d2.firebasestorage.app",
+  messagingSenderId: "789672051942",
+  appId: "1:789672051942:web:bae5dd00e653f7d089a727"
 };
 
 // --- INICIALIZACIÓN DE FIREBASE ---
@@ -39,7 +39,7 @@ let initializationError = null;
 
 try {
   // Validación simple para avisarte si faltan las claves
-  if (firebaseConfig.apiKey === "TU_API_KEY_AQUI" || !firebaseConfig.apiKey) {
+  if (!firebaseConfig.apiKey) {
     initializationError = "Faltan las credenciales reales en la constante firebaseConfig.";
   } else {
     app = initializeApp(firebaseConfig);
