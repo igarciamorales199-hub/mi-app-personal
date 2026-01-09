@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-// Importamos la conexión a Firebase (ahora sí encontrará el archivo al generarse juntos)
-import { auth, provider, db } from './firebase';
+// Importamos la configuración y el posible error de inicialización
+import { auth, provider, db, initializationError } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 import { 
   LayoutDashboard, KanbanSquare, StickyNote, FileText, Target, Plus, 
   CheckCircle2, Clock, Trash2, X, Menu, ChevronRight, Upload, ExternalLink, 
-  Calendar, Zap, CheckSquare, Hash, Percent, LogOut, LogIn
+  Calendar, Zap, CheckSquare, Hash, Percent, LogOut, LogIn, AlertTriangle
 } from 'lucide-react';
 
 // --- ESTILOS MÓVILES ---
@@ -38,16 +38,32 @@ const Button = ({ children, onClick, variant = "primary", className = "", size =
 };
 
 // --- PANTALLA DE LOGIN ---
-const LoginScreen = ({ onLogin }) => (
+const LoginScreen = ({ onLogin, errorMsg }) => (
   <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 p-6 text-center">
     <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/30">
       <LayoutDashboard className="text-white w-8 h-8" />
     </div>
     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Personal OS</h1>
     <p className="text-slate-500 mb-8 max-w-xs">Sincroniza tus tareas, notas y hábitos en todos tus dispositivos.</p>
-    <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg">
-      <LogIn size={20} /> Entrar con Google
-    </Button>
+    
+    {/* Mensaje de error visible si Firebase falla */}
+    {errorMsg && (
+      <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
+        <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error de Acceso</div>
+        {errorMsg}
+      </div>
+    )}
+
+    {initializationError ? (
+      <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
+        <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Falta Configuración</div>
+        Debes agregar tus claves de Firebase en el archivo <code>src/firebase.js</code> para poder iniciar sesión.
+      </div>
+    ) : (
+      <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg">
+        <LogIn size={20} /> Entrar con Google
+      </Button>
+    )}
   </div>
 );
 
@@ -179,6 +195,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('dashboard');
   const [darkMode, setDarkMode] = useState(true);
+  const [loginError, setLoginError] = useState(""); // Estado para errores de login visibles
 
   // Estados de datos
   const [tasks, setTasks] = useState([]);
@@ -190,7 +207,7 @@ export default function App() {
   // 1. Manejar Autenticación
   useEffect(() => {
     if (!auth) {
-        console.warn("Firebase Auth no inicializado. Revisa firebase.js");
+        console.warn("Firebase Auth no inicializado. Es probable que falten las claves en firebase.js");
         setLoading(false);
         return;
     }
@@ -218,13 +235,15 @@ export default function App() {
         setHabits(data.habits || []);
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Error en snapshot:", error);
+      // No mostramos error en UI para no interrumpir, pero lo logueamos
     });
 
     return () => unsubscribeSnapshot();
   }, [user]);
 
   // 3. Guardar cambios (Escribir en la Base de Datos)
-  // Usamos useEffect para guardar automáticamente cuando los datos cambian
   useEffect(() => {
     if (!user || loading || !db) return;
 
@@ -239,7 +258,6 @@ export default function App() {
       }
     };
 
-    // Debounce pequeño para no saturar la base de datos si escribes muy rápido
     const timeoutId = setTimeout(saveData, 1000);
     return () => clearTimeout(timeoutId);
   }, [tasks, notes, goals, habits, user, loading]);
@@ -250,11 +268,32 @@ export default function App() {
   }, [darkMode]);
 
   const handleLogin = async () => {
-    if (!auth) {
-        alert("Error: Firebase no configurado correctamente. Revisa el archivo firebase.js y agrega tus claves.");
-        return;
+    setLoginError(""); // Limpiar errores previos
+    
+    if (initializationError) {
+      setLoginError(`Error de configuración: ${initializationError}. Revisa firebase.js.`);
+      return;
     }
-    try { await signInWithPopup(auth, provider); } catch (error) { console.error(error); }
+
+    if (!auth) {
+      setLoginError("Error interno: Firebase no se pudo inicializar.");
+      return;
+    }
+
+    try { 
+      await signInWithPopup(auth, provider); 
+    } catch (error) { 
+      console.error("Error completo de login:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setLoginError("Dominio no autorizado. Ve a Firebase Console -> Authentication -> Settings -> Authorized Domains y agrega el dominio actual.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setLoginError("La ventana de inicio de sesión se cerró antes de terminar.");
+      } else if (error.code === 'auth/api-key-not-valid') {
+        setLoginError("La API Key de Firebase no es válida. Revisa tu archivo firebase.js.");
+      } else {
+        setLoginError(`Error (${error.code}): ${error.message}`);
+      }
+    }
   };
 
   const handleLogout = async () => {
@@ -272,7 +311,7 @@ export default function App() {
     }
   };
 
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} errorMsg={loginError} />;
 
   const BottomNav = () => (
     <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe px-6 py-2 flex justify-between items-center z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:hidden">
