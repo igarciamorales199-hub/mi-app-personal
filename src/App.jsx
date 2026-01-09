@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-// Importamos la conexión a Firebase que configuraste en el paso anterior
+// Importamos la conexión a Firebase (ahora sí encontrará el archivo al generarse juntos)
 import { auth, provider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -189,6 +189,11 @@ export default function App() {
 
   // 1. Manejar Autenticación
   useEffect(() => {
+    if (!auth) {
+        console.warn("Firebase Auth no inicializado. Revisa firebase.js");
+        setLoading(false);
+        return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (!currentUser) setLoading(false);
@@ -198,7 +203,7 @@ export default function App() {
 
   // 2. Sincronizar Base de Datos (Leer y Escuchar cambios)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
     
     // Referencia al documento del usuario
     const userDocRef = doc(db, "users", user.uid);
@@ -221,7 +226,7 @@ export default function App() {
   // 3. Guardar cambios (Escribir en la Base de Datos)
   // Usamos useEffect para guardar automáticamente cuando los datos cambian
   useEffect(() => {
-    if (!user || loading) return;
+    if (!user || loading || !db) return;
 
     const saveData = async () => {
       try {
@@ -245,10 +250,15 @@ export default function App() {
   }, [darkMode]);
 
   const handleLogin = async () => {
+    if (!auth) {
+        alert("Error: Firebase no configurado correctamente. Revisa el archivo firebase.js y agrega tus claves.");
+        return;
+    }
     try { await signInWithPopup(auth, provider); } catch (error) { console.error(error); }
   };
 
   const handleLogout = async () => {
+    if (!auth) return;
     await signOut(auth);
     setTasks([]); setNotes([]); setGoals([]); setHabits([]);
   };
