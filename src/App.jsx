@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, KanbanSquare, StickyNote, FileText, Target, Plus, 
   CheckCircle2, Clock, Trash2, X, Menu, ChevronRight, Upload, ExternalLink, 
-  Calendar, Zap, CheckSquare, Hash, Percent, LogOut, LogIn, AlertTriangle, Loader2
+  Calendar, Zap, CheckSquare, Hash, Percent, LogOut, LogIn, AlertTriangle, Loader2, Info
 } from 'lucide-react';
 
 // --- IMPORTANTE: FIREBASE IMPORTS ---
@@ -10,10 +10,11 @@ import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  signInWithRedirect, 
-  getRedirectResult, 
+  signInWithPopup, // Usamos Popup para mayor estabilidad en móvil si se configura persistencia
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -22,7 +23,7 @@ import {
   onSnapshot 
 } from "firebase/firestore";
 
-// --- CONFIGURACIÓN DE FIREBASE (YA INCLUYE TUS DATOS) ---
+// --- CONFIGURACIÓN DE FIREBASE (TUS DATOS) ---
 const firebaseConfig = {
   apiKey: "AIzaSyDKJhSx4GctH-GlHbOesHp_4bbxlkeNtnI",
   authDomain: "personal-os-sync-147d2.firebaseapp.com",
@@ -37,11 +38,14 @@ let app, auth, provider, db;
 let initializationError = null;
 
 try {
-  // Inicializamos directamente con tus credenciales
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  provider = new GoogleAuthProvider();
-  db = getFirestore(app);
+  if (!firebaseConfig.apiKey) {
+    initializationError = "Faltan las credenciales reales en la constante firebaseConfig.";
+  } else {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    provider = new GoogleAuthProvider();
+    db = getFirestore(app);
+  }
 } catch (error) {
   console.error("Error inicializando Firebase:", error);
   initializationError = error.message;
@@ -74,35 +78,47 @@ const Button = ({ children, onClick, variant = "primary", className = "", size =
   return <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}>{children}</button>;
 };
 
-// --- PANTALLA DE LOGIN ---
-const LoginScreen = ({ onLogin, errorMsg, isRedirecting }) => (
-  <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 p-6 text-center">
-    <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/30">
-      <LayoutDashboard className="text-white w-8 h-8" />
-    </div>
-    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Personal OS</h1>
-    <p className="text-slate-500 mb-8 max-w-xs">Sincroniza tus tareas, notas y hábitos en todos tus dispositivos.</p>
-    
-    {errorMsg && (
-      <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
-        <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error de Acceso</div>
-        {errorMsg}
-      </div>
-    )}
+// --- PANTALLA DE LOGIN MEJORADA ---
+const LoginScreen = ({ onLogin, errorMsg, isLoading }) => {
+  // Obtenemos el dominio actual para ayudar al usuario a configurar Firebase
+  const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'desconocido';
 
-    {initializationError ? (
-      <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
-        <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error de Inicialización</div>
-        <p className="text-xs opacity-75">{initializationError}</p>
+  return (
+    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 p-6 text-center">
+      <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/30">
+        <LayoutDashboard className="text-white w-8 h-8" />
       </div>
-    ) : (
-      <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg" disabled={isRedirecting}>
-        {isRedirecting ? <Loader2 size={20} className="animate-spin" /> : <LogIn size={20} />}
-        {isRedirecting ? " Redirigiendo..." : " Entrar con Google"}
-      </Button>
-    )}
-  </div>
-);
+      <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Personal OS</h1>
+      <p className="text-slate-500 mb-8 max-w-xs">Sincroniza tus tareas, notas y hábitos en todos tus dispositivos.</p>
+      
+      {/* Ayuda de Dominio - ÚTIL PARA DEPURAR */}
+      <div className="mb-6 p-3 bg-blue-50/50 dark:bg-slate-900 border border-blue-100 dark:border-slate-800 rounded-lg text-xs text-slate-500 max-w-xs mx-auto text-left">
+        <p className="flex items-center gap-1 mb-1 font-semibold text-blue-600"><Info size={12}/> Configuración requerida:</p>
+        <p className="mb-2">Si el login falla, asegúrate de que este dominio esté en <em>Firebase Console &gt; Authentication &gt; Settings &gt; Authorized Domains</em>:</p>
+        <code className="bg-white dark:bg-black px-2 py-1 rounded select-all block text-center border border-slate-200 dark:border-slate-700 font-mono text-slate-700 dark:text-slate-300">{currentDomain}</code>
+      </div>
+
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-6 text-sm max-w-xs text-left shadow-sm">
+          <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error de Acceso</div>
+          {errorMsg}
+        </div>
+      )}
+
+      {initializationError ? (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
+          <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error Interno</div>
+          <p className="text-xs opacity-75">{initializationError}</p>
+        </div>
+      ) : (
+        <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg" disabled={isLoading}>
+          {isLoading ? <Loader2 size={20} className="animate-spin" /> : <LogIn size={20} />}
+          {isLoading ? " Conectando..." : " Entrar con Google"}
+        </Button>
+      )}
+    </div>
+  );
+};
 
 // --- MÓDULOS DE LA APP ---
 
@@ -234,38 +250,23 @@ export default function App() {
   const [view, setView] = useState('dashboard');
   const [darkMode, setDarkMode] = useState(true);
   const [loginError, setLoginError] = useState("");
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Estados de datos
   const [tasks, setTasks] = useState([]);
   const [notes, setNotes] = useState([]);
   const [goals, setGoals] = useState([]);
   const [habits, setHabits] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [syncLoading, setSyncLoading] = useState(true);
 
-  // MANEJO DE SESIÓN Y REDIRECCIÓN
+  // MANEJO DE SESIÓN
   useEffect(() => {
-    if (!auth) { setLoading(false); return; }
+    if (!auth) { setIsLoading(false); return; }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        setIsRedirecting(false); 
-      } else {
-        setLoading(false);
-      }
+      setIsLoading(false);
     });
-
-    // IMPORTANTE: Manejo de vuelta de Google
-    getRedirectResult(auth)
-      .then((result) => { if (result) console.log("Login exitoso"); })
-      .catch((error) => {
-        console.error("Error redirect:", error);
-        setIsRedirecting(false);
-        setLoginError(error.code === 'auth/unauthorized-domain' 
-          ? "Dominio no autorizado en Firebase Console." 
-          : error.message);
-      });
 
     return () => unsubscribe();
   }, []);
@@ -278,20 +279,20 @@ export default function App() {
         const d = docSnap.data();
         setTasks(d.tasks || []); setNotes(d.notes || []); setGoals(d.goals || []); setHabits(d.habits || []);
       }
-      setLoading(false);
+      setSyncLoading(false);
     });
     return () => unsub();
   }, [user]);
 
   // GUARDADO AUTOMÁTICO
   useEffect(() => {
-    if (!user || loading || !db) return;
+    if (!user || syncLoading || !db) return;
     const timeout = setTimeout(async () => {
       try { await setDoc(doc(db, "users", user.uid), { tasks, notes, goals, habits }, { merge: true }); }
       catch (e) { console.error("Error saving:", e); }
     }, 1000);
     return () => clearTimeout(timeout);
-  }, [tasks, notes, goals, habits, user, loading]);
+  }, [tasks, notes, goals, habits, user, syncLoading]);
 
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
@@ -303,16 +304,32 @@ export default function App() {
     if (initializationError) { setLoginError(initializationError); return; }
     if (!auth) { setLoginError("Error interno: Firebase no inicializado"); return; }
     
-    setIsRedirecting(true);
-    try { await signInWithRedirect(auth, provider); } 
-    catch (error) { setIsRedirecting(false); setLoginError(error.message); }
+    setIsLoading(true);
+    try {
+      // 1. FORZAMOS LA PERSISTENCIA: Esto evita que el móvil olvide la sesión
+      await setPersistence(auth, browserLocalPersistence);
+      // 2. USAMOS POPUP: Es mejor que Redirect porque la ventana emergente es manejada por el SO del móvil
+      await signInWithPopup(auth, provider);
+    } catch (error) { 
+      setIsLoading(false); 
+      console.error(error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setLoginError("Dominio no autorizado. Copia el dominio de arriba y agrégalo en Firebase Console.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setLoginError("Cancelaste el inicio de sesión.");
+      } else if (error.code === 'auth/popup-blocked') {
+         setLoginError("El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.");
+      } else {
+        setLoginError(`Error: ${error.message}`);
+      }
+    }
   };
 
   const handleLogout = async () => { if (auth) await signOut(auth); setTasks([]); setNotes([]); setGoals([]); setHabits([]); };
 
   const getStatusColor = (s) => s === 'todo' ? 'bg-pink-500' : s === 'doing' ? 'bg-yellow-500' : s === 'done' ? 'bg-green-500' : 'bg-slate-500';
 
-  if (!user) return <LoginScreen onLogin={handleLogin} errorMsg={loginError} isRedirecting={isRedirecting} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} errorMsg={loginError} isLoading={isLoading} />;
 
   return (
     <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
