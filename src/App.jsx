@@ -1,14 +1,56 @@
 import React, { useState, useEffect } from 'react';
-// Importamos la configuración y el posible error de inicialización
-import { auth, provider, db, initializationError } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
-
 import { 
   LayoutDashboard, KanbanSquare, StickyNote, FileText, Target, Plus, 
   CheckCircle2, Clock, Trash2, X, Menu, ChevronRight, Upload, ExternalLink, 
-  Calendar, Zap, CheckSquare, Hash, Percent, LogOut, LogIn, AlertTriangle
+  Calendar, Zap, CheckSquare, Hash, Percent, LogOut, LogIn, AlertTriangle, Loader2
 } from 'lucide-react';
+
+// --- IMPORTANTE: FIREBASE IMPORTS ---
+import { initializeApp } from "firebase/app";
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  onSnapshot 
+} from "firebase/firestore";
+
+// --- CONFIGURACIÓN DE FIREBASE (INTEGRADA) ---
+// REEMPLAZA ESTOS VALORES CON TUS CREDENCIALES REALES DE FIREBASE
+const firebaseConfig = {
+  apiKey: "TU_API_KEY_AQUI",
+  authDomain: "TU_AUTH_DOMAIN_AQUI",
+  projectId: "TU_PROJECT_ID_AQUI",
+  storageBucket: "TU_STORAGE_BUCKET_AQUI",
+  messagingSenderId: "TU_MESSAGING_SENDER_ID_AQUI",
+  appId: "TU_APP_ID_AQUI"
+};
+
+// --- INICIALIZACIÓN DE FIREBASE ---
+let app, auth, provider, db;
+let initializationError = null;
+
+try {
+  // Validación simple para avisarte si faltan las claves
+  if (firebaseConfig.apiKey === "TU_API_KEY_AQUI" || !firebaseConfig.apiKey) {
+    initializationError = "Faltan las credenciales reales en la constante firebaseConfig.";
+  } else {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    provider = new GoogleAuthProvider();
+    db = getFirestore(app);
+  }
+} catch (error) {
+  console.error("Error inicializando Firebase:", error);
+  initializationError = error.message;
+}
 
 // --- ESTILOS MÓVILES ---
 const MobileStyles = () => (
@@ -38,7 +80,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", size =
 };
 
 // --- PANTALLA DE LOGIN ---
-const LoginScreen = ({ onLogin, errorMsg }) => (
+const LoginScreen = ({ onLogin, errorMsg, isRedirecting }) => (
   <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 p-6 text-center">
     <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/30">
       <LayoutDashboard className="text-white w-8 h-8" />
@@ -46,7 +88,6 @@ const LoginScreen = ({ onLogin, errorMsg }) => (
     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Personal OS</h1>
     <p className="text-slate-500 mb-8 max-w-xs">Sincroniza tus tareas, notas y hábitos en todos tus dispositivos.</p>
     
-    {/* Mensaje de error visible si Firebase falla */}
     {errorMsg && (
       <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
         <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error de Acceso</div>
@@ -57,19 +98,20 @@ const LoginScreen = ({ onLogin, errorMsg }) => (
     {initializationError ? (
       <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
         <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Falta Configuración</div>
-        Debes agregar tus claves de Firebase en el archivo <code>src/firebase.js</code> para poder iniciar sesión.
+        <p className="mb-2">Debes editar el archivo <code>src/App.jsx</code> y poner tus claves de Firebase en la constante <code>firebaseConfig</code> al inicio del archivo.</p>
       </div>
     ) : (
-      <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg">
-        <LogIn size={20} /> Entrar con Google
+      <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg" disabled={isRedirecting}>
+        {isRedirecting ? <Loader2 size={20} className="animate-spin" /> : <LogIn size={20} />}
+        {isRedirecting ? " Redirigiendo..." : " Entrar con Google"}
       </Button>
     )}
   </div>
 );
 
-// --- MÓDULOS ---
+// --- MÓDULOS DE LA APP ---
 
-// KANBAN
+// 1. KANBAN
 const KanbanColumn = ({ title, status, color, tasks, moveTask, deleteTask, onAddTask }) => {
   const [localText, setLocalText] = useState("");
   const handleAdd = () => { if (!localText.trim()) return; onAddTask(localText); setLocalText(""); };
@@ -108,6 +150,7 @@ const KanbanColumn = ({ title, status, color, tasks, moveTask, deleteTask, onAdd
     </div>
   );
 };
+
 const KanbanModule = ({ tasks, setTasks }) => {
   const addTask = (title) => setTasks([...tasks, { id: Date.now(), title, status: 'todo', createdAt: new Date().toISOString() }]);
   const moveTask = (taskId, newStatus) => setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
@@ -130,7 +173,7 @@ const KanbanModule = ({ tasks, setTasks }) => {
   );
 };
 
-// NOTAS
+// 2. NOTAS
 const NotesModule = ({ notes, setNotes }) => {
   const [activeNote, setActiveNote] = useState(null);
   const createNote = () => { const newNote = { id: Date.now(), title: "", content: "", updatedAt: new Date().toISOString() }; setNotes([newNote, ...notes]); setActiveNote(newNote); };
@@ -161,7 +204,7 @@ const NotesModule = ({ notes, setNotes }) => {
   );
 };
 
-// OBJETIVOS
+// 3. OBJETIVOS
 const GoalsModule = ({ goals, setGoals }) => {
   const [newGoal, setNewGoal] = useState("");
   const addGoal = () => { if (!newGoal) return; setGoals([...goals, { id: Date.now(), title: newGoal, progress: 0 }]); setNewGoal(""); };
@@ -174,7 +217,7 @@ const GoalsModule = ({ goals, setGoals }) => {
   );
 };
 
-// HABITOS
+// 4. HABITOS
 const HabitsModule = ({ habits, setHabits }) => {
   const [newHabit, setNewHabit] = useState("");
   const today = new Date().toLocaleDateString('en-CA');
@@ -190,12 +233,13 @@ const HabitsModule = ({ habits, setHabits }) => {
   );
 };
 
-// --- APP PRINCIPAL (CON FIREBASE SYNC) ---
+// --- APP PRINCIPAL ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('dashboard');
   const [darkMode, setDarkMode] = useState(true);
-  const [loginError, setLoginError] = useState(""); // Estado para errores de login visibles
+  const [loginError, setLoginError] = useState("");
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   // Estados de datos
   const [tasks, setTasks] = useState([]);
@@ -204,62 +248,54 @@ export default function App() {
   const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Manejar Autenticación
+  // MANEJO DE SESIÓN Y REDIRECCIÓN
   useEffect(() => {
-    if (!auth) {
-        console.warn("Firebase Auth no inicializado. Es probable que falten las claves en firebase.js");
-        setLoading(false);
-        return;
-    }
+    if (!auth) { setLoading(false); return; }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (!currentUser) setLoading(false);
+      if (currentUser) {
+        setIsRedirecting(false); 
+      } else {
+        setLoading(false);
+      }
     });
+
+    // IMPORTANTE: Manejo de vuelta de Google
+    getRedirectResult(auth)
+      .then((result) => { if (result) console.log("Login exitoso"); })
+      .catch((error) => {
+        console.error("Error redirect:", error);
+        setIsRedirecting(false);
+        setLoginError(error.code === 'auth/unauthorized-domain' 
+          ? "Dominio no autorizado en Firebase Console." 
+          : error.message);
+      });
+
     return () => unsubscribe();
   }, []);
 
-  // 2. Sincronizar Base de Datos (Leer y Escuchar cambios)
+  // SINCRONIZACIÓN DATOS
   useEffect(() => {
     if (!user || !db) return;
-    
-    // Referencia al documento del usuario
-    const userDocRef = doc(db, "users", user.uid);
-
-    // Escuchar cambios en tiempo real
-    const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setTasks(data.tasks || []);
-        setNotes(data.notes || []);
-        setGoals(data.goals || []);
-        setHabits(data.habits || []);
+        const d = docSnap.data();
+        setTasks(d.tasks || []); setNotes(d.notes || []); setGoals(d.goals || []); setHabits(d.habits || []);
       }
       setLoading(false);
-    }, (error) => {
-      console.error("Error en snapshot:", error);
-      // No mostramos error en UI para no interrumpir, pero lo logueamos
     });
-
-    return () => unsubscribeSnapshot();
+    return () => unsub();
   }, [user]);
 
-  // 3. Guardar cambios (Escribir en la Base de Datos)
+  // GUARDADO AUTOMÁTICO
   useEffect(() => {
     if (!user || loading || !db) return;
-
-    const saveData = async () => {
-      try {
-        await setDoc(doc(db, "users", user.uid), {
-          tasks, notes, goals, habits,
-          lastUpdated: new Date().toISOString()
-        }, { merge: true });
-      } catch (e) {
-        console.error("Error guardando datos: ", e);
-      }
-    };
-
-    const timeoutId = setTimeout(saveData, 1000);
-    return () => clearTimeout(timeoutId);
+    const timeout = setTimeout(async () => {
+      try { await setDoc(doc(db, "users", user.uid), { tasks, notes, goals, habits }, { merge: true }); }
+      catch (e) { console.error("Error saving:", e); }
+    }, 1000);
+    return () => clearTimeout(timeout);
   }, [tasks, notes, goals, habits, user, loading]);
 
   useEffect(() => {
@@ -268,80 +304,36 @@ export default function App() {
   }, [darkMode]);
 
   const handleLogin = async () => {
-    setLoginError(""); // Limpiar errores previos
+    setLoginError("");
+    if (initializationError) { setLoginError(initializationError); return; }
+    if (!auth) { setLoginError("Error interno: Firebase no inicializado"); return; }
     
-    if (initializationError) {
-      setLoginError(`Error de configuración: ${initializationError}. Revisa firebase.js.`);
-      return;
-    }
-
-    if (!auth) {
-      setLoginError("Error interno: Firebase no se pudo inicializar.");
-      return;
-    }
-
-    try { 
-      await signInWithPopup(auth, provider); 
-    } catch (error) { 
-      console.error("Error completo de login:", error);
-      if (error.code === 'auth/unauthorized-domain') {
-        setLoginError("Dominio no autorizado. Ve a Firebase Console -> Authentication -> Settings -> Authorized Domains y agrega el dominio actual.");
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        setLoginError("La ventana de inicio de sesión se cerró antes de terminar.");
-      } else if (error.code === 'auth/api-key-not-valid') {
-        setLoginError("La API Key de Firebase no es válida. Revisa tu archivo firebase.js.");
-      } else {
-        setLoginError(`Error (${error.code}): ${error.message}`);
-      }
-    }
+    setIsRedirecting(true);
+    try { await signInWithRedirect(auth, provider); } 
+    catch (error) { setIsRedirecting(false); setLoginError(error.message); }
   };
 
-  const handleLogout = async () => {
-    if (!auth) return;
-    await signOut(auth);
-    setTasks([]); setNotes([]); setGoals([]); setHabits([]);
-  };
+  const handleLogout = async () => { if (auth) await signOut(auth); setTasks([]); setNotes([]); setGoals([]); setHabits([]); };
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'todo': return 'bg-pink-500';
-      case 'doing': return 'bg-yellow-500';
-      case 'done': return 'bg-green-500';
-      default: return 'bg-slate-500';
-    }
-  };
+  const getStatusColor = (s) => s === 'todo' ? 'bg-pink-500' : s === 'doing' ? 'bg-yellow-500' : s === 'done' ? 'bg-green-500' : 'bg-slate-500';
 
-  if (!user) return <LoginScreen onLogin={handleLogin} errorMsg={loginError} />;
-
-  const BottomNav = () => (
-    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe px-6 py-2 flex justify-between items-center z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:hidden">
-      <button onClick={() => setView('dashboard')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}><LayoutDashboard size={24} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[10px] font-medium">Inicio</span></button>
-      <button onClick={() => setView('kanban')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'kanban' ? 'text-blue-600' : 'text-slate-400'}`}><KanbanSquare size={24} strokeWidth={view === 'kanban' ? 2.5 : 2} /><span className="text-[10px] font-medium">Kanban</span></button>
-      <div className="relative -top-6"><button onClick={() => setView('notes')} className="bg-blue-600 text-white p-4 rounded-full shadow-lg shadow-blue-600/30 active:scale-90 transition-transform"><StickyNote size={24} /></button></div>
-      <button onClick={() => setView('goals')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'goals' ? 'text-blue-600' : 'text-slate-400'}`}><Target size={24} strokeWidth={view === 'goals' ? 2.5 : 2} /><span className="text-[10px] font-medium">Metas</span></button>
-      <button onClick={() => setView('habits')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${view === 'habits' ? 'text-blue-600' : 'text-slate-400'}`}><Zap size={24} strokeWidth={view === 'habits' ? 2.5 : 2} /><span className="text-[10px] font-medium">Hábito</span></button>
-    </div>
-  );
-
-  const DesktopSidebar = () => (
-    <aside className="hidden md:flex w-64 flex-col border-r border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex-none h-screen">
-      <div className="font-bold text-xl mb-8 flex items-center gap-2 px-2 text-slate-800 dark:text-white"><div className="w-8 h-8 bg-blue-600 rounded-lg"></div> OS</div>
-      <nav className="space-y-1">
-        {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Inicio' }, { id: 'kanban', icon: KanbanSquare, label: 'Tareas' }, { id: 'notes', icon: StickyNote, label: 'Notas' }, { id: 'goals', icon: Target, label: 'Metas' }, { id: 'habits', icon: Zap, label: 'Hábitos' }].map(item => (
-          <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${view === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><item.icon size={20} /> {item.label}</button>
-        ))}
-      </nav>
-      <div className="mt-auto space-y-2">
-        <button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center gap-2 px-3 py-2 text-slate-500">{darkMode ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}</button>
-        <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><LogOut size={18} /> Cerrar Sesión</button>
-      </div>
-    </aside>
-  );
+  if (!user) return <LoginScreen onLogin={handleLogin} errorMsg={loginError} isRedirecting={isRedirecting} />;
 
   return (
     <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
       <MobileStyles />
-      <DesktopSidebar />
+      <aside className="hidden md:flex w-64 flex-col border-r border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex-none h-screen">
+        <div className="font-bold text-xl mb-8 flex items-center gap-2 px-2"><div className="w-8 h-8 bg-blue-600 rounded-lg"></div> OS</div>
+        <nav className="space-y-1">
+          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Inicio' }, { id: 'kanban', icon: KanbanSquare, label: 'Tareas' }, { id: 'notes', icon: StickyNote, label: 'Notas' }, { id: 'goals', icon: Target, label: 'Metas' }, { id: 'habits', icon: Zap, label: 'Hábitos' }].map(item => (
+            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${view === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><item.icon size={20} /> {item.label}</button>
+          ))}
+        </nav>
+        <div className="mt-auto space-y-2">
+          <button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center gap-2 px-3 py-2 text-slate-500">{darkMode ? '☀️' : '🌙'} Modo</button>
+          <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg"><LogOut size={18} /> Salir</button>
+        </div>
+      </aside>
       <main className="flex-1 flex flex-col h-full w-full relative">
         <div className={`flex-1 w-full ${view === 'kanban' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto smooth-scroll'}`}>
           {view === 'dashboard' && (
@@ -362,7 +354,13 @@ export default function App() {
           {view === 'goals' && <GoalsModule goals={goals} setGoals={setGoals} />}
           {view === 'habits' && <HabitsModule habits={habits} setHabits={setHabits} />}
         </div>
-        <BottomNav />
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe px-6 py-2 flex justify-between items-center z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:hidden">
+          <button onClick={() => setView('dashboard')} className={`p-2 ${view === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}><LayoutDashboard size={24} /><span className="text-[10px] block text-center">Inicio</span></button>
+          <button onClick={() => setView('kanban')} className={`p-2 ${view === 'kanban' ? 'text-blue-600' : 'text-slate-400'}`}><KanbanSquare size={24} /><span className="text-[10px] block text-center">Kanban</span></button>
+          <div className="relative -top-6"><button onClick={() => setView('notes')} className="bg-blue-600 text-white p-4 rounded-full shadow-lg active:scale-90"><StickyNote size={24} /></button></div>
+          <button onClick={() => setView('goals')} className={`p-2 ${view === 'goals' ? 'text-blue-600' : 'text-slate-400'}`}><Target size={24} /><span className="text-[10px] block text-center">Metas</span></button>
+          <button onClick={() => setView('habits')} className={`p-2 ${view === 'habits' ? 'text-blue-600' : 'text-slate-400'}`}><Zap size={24} /><span className="text-[10px] block text-center">Hábito</span></button>
+        </div>
       </main>
     </div>
   );
