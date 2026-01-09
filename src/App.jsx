@@ -22,8 +22,7 @@ import {
   onSnapshot 
 } from "firebase/firestore";
 
-// --- CONFIGURACIÓN DE FIREBASE (INTEGRADA) ---
-// TUS CREDENCIALES REALES
+// --- CONFIGURACIÓN DE FIREBASE (YA INCLUYE TUS DATOS) ---
 const firebaseConfig = {
   apiKey: "AIzaSyDKJhSx4GctH-GlHbOesHp_4bbxlkeNtnI",
   authDomain: "personal-os-sync-147d2.firebaseapp.com",
@@ -38,15 +37,11 @@ let app, auth, provider, db;
 let initializationError = null;
 
 try {
-  // Validación simple para avisarte si faltan las claves
-  if (!firebaseConfig.apiKey) {
-    initializationError = "Faltan las credenciales reales en la constante firebaseConfig.";
-  } else {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    provider = new GoogleAuthProvider();
-    db = getFirestore(app);
-  }
+  // Inicializamos directamente con tus credenciales
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  provider = new GoogleAuthProvider();
+  db = getFirestore(app);
 } catch (error) {
   console.error("Error inicializando Firebase:", error);
   initializationError = error.message;
@@ -97,8 +92,8 @@ const LoginScreen = ({ onLogin, errorMsg, isRedirecting }) => (
 
     {initializationError ? (
       <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg mb-6 text-sm max-w-xs text-left">
-        <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Falta Configuración</div>
-        <p className="mb-2">Debes editar el archivo <code>src/App.jsx</code> y poner tus claves de Firebase en la constante <code>firebaseConfig</code> al inicio del archivo.</p>
+        <div className="flex items-center gap-2 font-bold mb-1"><AlertTriangle size={16}/> Error de Inicialización</div>
+        <p className="text-xs opacity-75">{initializationError}</p>
       </div>
     ) : (
       <Button onClick={onLogin} className="w-full max-w-xs py-4 text-lg" disabled={isRedirecting}>
