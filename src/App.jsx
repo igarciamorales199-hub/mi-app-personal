@@ -7,24 +7,35 @@ import {
 
 // --- IMPORTANTE: FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  onSnapshot 
+} from "firebase/firestore";
 
-// REEMPLAZA ESTO CON LOS DATOS DE TU CONSOLA DE FIREBASE (Paso 1)
+// --- CONFIGURACIÓN DE FIREBASE (INTEGRADA) ---
+// REEMPLAZA ESTOS VALORES CON TUS CREDENCIALES REALES DE FIREBASE
 const firebaseConfig = {
-  apiKey: "AIzaSyDKJhSx4GctH-GlHbOesHp_4bbxlkeNtnI",
-  authDomain: "personal-os-sync-147d2.firebaseapp.com",
-  projectId: "personal-os-sync-147d2",
-  storageBucket: "personal-os-sync-147d2.firebasestorage.app",
-  messagingSenderId: "789672051942",
-  appId: "1:789672051942:web:bae5dd00e653f7d089a727"
+  apiKey: "TU_API_KEY_AQUI",
+  authDomain: "TU_AUTH_DOMAIN_AQUI",
+  projectId: "TU_PROJECT_ID_AQUI",
+  storageBucket: "TU_STORAGE_BUCKET_AQUI",
+  messagingSenderId: "TU_MESSAGING_SENDER_ID_AQUI",
+  appId: "TU_APP_ID_AQUI"
 };
 
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const provider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+// --- INICIALIZACIÓN DE FIREBASE ---
+let app, auth, provider, db;
+let initializationError = null;
 
 try {
   // Validación simple para avisarte si faltan las claves
