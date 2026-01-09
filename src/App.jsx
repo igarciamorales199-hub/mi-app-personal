@@ -317,6 +317,8 @@ export default function App() {
         setLoginError("Dominio no autorizado. Copia el dominio de arriba y agrégalo en Firebase Console.");
       } else if (error.code === 'auth/popup-closed-by-user') {
         setLoginError("Cancelaste el inicio de sesión.");
+      } else if (error.code === 'auth/operation-not-allowed') {
+         setLoginError("El método de acceso con Google no está habilitado. Ve a Firebase Console > Authentication > Sign-in method y habilita Google.");
       } else if (error.code === 'auth/popup-blocked') {
          setLoginError("El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.");
       } else {
